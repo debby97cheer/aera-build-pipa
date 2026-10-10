@@ -25,11 +25,14 @@ jobs:
           sudo docker image prune --all --force
           df -h
 
-      - name: 2. 配置 8GB Swap 虚拟内存
+      - name: 2. 配置 20GB Swap 虚拟内存 (彻底杜绝 OOM)
         run: |
+          # 停用旧 swap
           sudo swapoff -a || true
           sudo rm -f /swapfile_aera
-          sudo fallocate -l 8G /swapfile_aera
+          
+          # 分配 20GB Swap (Runner 硬盘有 100G+ 空闲，20G 可完全吃下 Soong 峰值)
+          sudo fallocate -l 20G /swapfile_aera
           sudo chmod 600 /swapfile_aera
           sudo mkswap /swapfile_aera
           sudo swapon /swapfile_aera
@@ -79,19 +82,18 @@ jobs:
           # 仅拉取 pipa 设备树
           git clone --depth=1 -b ${{ inputs.DEVICE_TREE_BRANCH }} ${{ inputs.DEVICE_TREE_URL }} device/xiaomi/pipa
           
-      - name: 6. 启动编译 (生成 boot.img)
+      -- name: 6. 启动编译 (生成 boot.img)
         run: |
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
           
-          # 核心防卡死：将 Go 内存上限强行锁死在 11GB，留出 4GB 物理内存给系统缓存，杜绝磁盘 Swap 颠簸
-          export GOMEMLIMIT=11GiB
-          export GOGC=80
+          # 调优 Go 垃圾回收阈值，让其更积极地释放废弃 AST 节点
+          export GOGC=60
           
           source build/envsetup.sh
           lunch aera_pipa-bp2a-eng
           
-          # 心跳同时监控 Mem 和 Swap，方便精准查看进度
+          # 保活与监控心跳
           (while true; do sleep 60; echo "[保活心跳 $(date +%T)] 正在生成依赖树/编译中："; free -h | grep -E 'Mem|Swap'; done) &
           HEARTBEAT_PID=$!
           
