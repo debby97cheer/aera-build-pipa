@@ -16,28 +16,46 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - name: 1. 深度清理磁盘空间 (释放 ~40GB)
+            - name: 1. 深度清理磁盘空间 (极限释放 ~35GB+)
         run: |
+          # 停用并彻底抹除 Docker 镜像及运行库
+          sudo systemctl stop docker.service || true
+          sudo systemctl stop containerd.service || true
+          sudo rm -rf /var/lib/docker /var/lib/containerd
+          
+          # 清除无用的预装大组件 (保留构建必需的 python/java/clang)
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo docker image prune --all --force
-          df -h
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /opt/hostedtoolcache
+          
+          # 清理 apt 缓存
+          sudo apt clean
+          
+          echo "=== 磁盘清理后状态 ==="
+          df -h /
 
-      - name: 2. 配置 20GB Swap 虚拟内存 (彻底杜绝 OOM)
+      - name: 2. 配置 12GB Swap 虚拟内存 (平衡防 OOM 与磁盘开销)
         run: |
           sudo systemctl stop systemd-oomd.service || true
           sudo systemctl disable systemd-oomd.service || true
           sudo systemctl mask systemd-oomd.service || true
           sudo sysctl vm.swappiness=100
+          
           sudo swapoff -a || true
           sudo rm -f /swapfile_aera
-          sudo fallocate -l 20G /swapfile_aera
+          
+          # 分配 12GB Swap (15G RAM + 12G Swap = 27GB，稳过峰值且不挤占磁盘)
+          sudo fallocate -l 12G /swapfile_aera
           sudo chmod 600 /swapfile_aera
           sudo mkswap /swapfile_aera
           sudo swapon /swapfile_aera
+          
+          echo "=== 内存与 Swap 状态 ==="
           free -h
+
 
       - name: 3. 安装依赖工具与 Repo
         run: |
