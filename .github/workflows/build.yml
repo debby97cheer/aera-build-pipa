@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       DEVICE_TREE_URL:
-        description: '你的 pipa 设备树仓库地址'
+        description: 'pipa 设备树仓库地址'
         required: true
         default: 'https://github.com/debby97cheer/device_xiaomi_pipa-AERA'
       DEVICE_TREE_BRANCH:
@@ -18,44 +18,33 @@ jobs:
     steps:
       - name: 1. 深度清理磁盘空间 (极限释放 ~35GB+)
         run: |
-          # 停用并彻底抹除 Docker 镜像及运行库
           sudo systemctl stop docker.service || true
           sudo systemctl stop containerd.service || true
           sudo rm -rf /var/lib/docker /var/lib/containerd
-          
-          # 清除无用的预装大组件 (保留构建必需的 python/java/clang)
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
           sudo rm -rf /usr/share/swift
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf /opt/hostedtoolcache
-          
-          # 清理 apt 缓存
           sudo apt clean
-          
           echo "=== 磁盘清理后状态 ==="
           df -h /
 
-      - name: 2. 配置 12GB Swap 虚拟内存 (平衡防 OOM 与磁盘开销)
+      - name: 2. 配置 16GB Swap 虚拟内存 (平衡防 OOM 与磁盘开销)
         run: |
           sudo systemctl stop systemd-oomd.service || true
           sudo systemctl disable systemd-oomd.service || true
           sudo systemctl mask systemd-oomd.service || true
           sudo sysctl vm.swappiness=100
-          
           sudo swapoff -a || true
           sudo rm -f /swapfile_aera
-          
-          # 分配 12GB Swap (15G RAM + 12G Swap = 27GB，稳过峰值且不挤占磁盘)
-          sudo fallocate -l 12G /swapfile_aera
+          sudo fallocate -l 16G /swapfile_aera
           sudo chmod 600 /swapfile_aera
           sudo mkswap /swapfile_aera
           sudo swapon /swapfile_aera
-          
           echo "=== 内存与 Swap 状态 ==="
           free -h
-
 
       - name: 3. 安装依赖工具与 Repo
         run: |
@@ -64,12 +53,10 @@ jobs:
             zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev lib32z1-dev \
             libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 \
             openjdk-11-jdk libncurses5 rsync bc libssl-dev
-          
           mkdir -p ~/bin
           curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           sudo ln -sf ~/bin/repo /usr/bin/repo
-          
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -95,30 +82,27 @@ jobs:
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
           export GOGC=60
-          
           source build/envsetup.sh
           lunch aera_pipa-bp2a-eng
-          
           (while true; do sleep 60; echo "[保活心跳 $(date +%T)] 正在生成依赖树/编译中："; free -h | grep -E 'Mem|Swap'; done) &
           HEARTBEAT_PID=$!
-          
           mka bootimage -j$(nproc)
           kill $HEARTBEAT_PID || true
 
       - name: 7. 提取与打包生成镜像
         run: |
-          mkdir -p ~/artifacts
+          mkdir -p /home/runner/artifacts
           cd ~/aera-work/out/target/product/pipa
           if [ -f "boot.img" ]; then
-            cp boot.img ~/artifacts/aera_pipa_boot.img
+            cp boot.img /home/runner/artifacts/aera_pipa_boot.img
           fi
           if [ -f "recovery.img" ]; then
-            cp recovery.img ~/artifacts/aera_pipa_recovery.img
+            cp recovery.img /home/runner/artifacts/aera_pipa_recovery.img
           fi
-          ls -lh ~/artifacts/
+          ls -lh /home/runner/artifacts/
 
       - name: 8. 上传构建成果
         uses: actions/upload-artifact@v4
         with:
           name: AERA-Recovery-pipa
-          path: ~/artifacts/*
+          path: /home/runner/artifacts/*
