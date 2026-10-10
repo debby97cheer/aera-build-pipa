@@ -58,11 +58,18 @@ jobs:
 
       - name: 4. 浅克隆同步 AERA-Recovery 源码
         run: |
+          # 1. 严禁 Git 弹出任何凭据输入提示 (遇到异常直接报错而非无限卡死)
+          export GIT_TERMINAL_PROMPT=0
+          
           rm -rf ~/aera-work
           mkdir -p ~/aera-work
           cd ~/aera-work
-          repo init -u https://github.com/AERA-Recovery/android_manifest.git -b aera-16.0 --depth=1
-          repo sync -c -j$(nproc) --force-sync --no-clone-bundle --no-tags
+          
+          # 2. 初始化并拉取
+          repo init -u https://github.com/AERA-Recovery/android_manifest.git -b aera-16.0 --depth=1 --no-repo-verify
+          
+          # 3. 启用失败快速跳过与 4 线程下载
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --fail-fast
 
       - name: 5. 拉取高通底层支持与 pipa 设备树
         run: |
