@@ -25,19 +25,20 @@ jobs:
           sudo docker image prune --all --force
           df -h
 
-      - name: 2. 配置 10GB Swap 虚拟内存并禁用 systemd-oomd
+      - name: 2. 配置 12GB Swap 并彻底拔除 systemd-oomd
         run: |
-          # 1. 关闭并彻底停用系统级 OOM 守护进程 (防止误杀编译进程)
-          sudo systemctl stop systemd-oomd || true
-          sudo systemctl disable systemd-oomd || true
+          # 彻底清除 Ubuntu 系统的 OOM 杀进程服务
+          sudo systemctl stop systemd-oomd.service || true
+          sudo systemctl disable systemd-oomd.service || true
+          sudo systemctl mask systemd-oomd.service || true
           
-          # 2. 调高系统的 Swap 积极性
+          # 优化虚拟内存积极性
           sudo sysctl vm.swappiness=100
           
-          # 3. 释放旧 swap 并建立 10GB 专用虚拟内存
+          # 释放旧 swap，新建 12GB 专用虚拟内存
           sudo swapoff -a || true
           sudo rm -f /swapfile_aera
-          sudo fallocate -l 10G /swapfile_aera
+          sudo fallocate -l 12G /swapfile_aera
           sudo chmod 600 /swapfile_aera
           sudo mkswap /swapfile_aera
           sudo swapon /swapfile_aera
@@ -92,14 +93,13 @@ jobs:
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
           
-          # 限制 Go 运行时的内存峰值，防止 soong_build 占用膨胀
-          export GOGC=50
-          export GOMEMLIMIT=10GiB
+          # 优化 Go 垃圾回收频率，防止生成 Ninja 文件时突发吃满内存
+          export GOGC=40
           
           source build/envsetup.sh
           lunch aera_pipa-bp2a-eng
           
-          # 指定并行任务，避免并发过高耗尽物理内存
+          # 并发数设置为与 CPU 核心一致
           mka bootimage -j$(nproc)
 
       - name: 7. 提取与打包生成镜像
