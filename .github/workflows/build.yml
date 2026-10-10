@@ -25,8 +25,16 @@ jobs:
           sudo docker image prune --all --force
           df -h
 
-      - name: 2. 配置 10GB Swap 虚拟内存 (防 OOM)
+      - name: 2. 配置 10GB Swap 虚拟内存并禁用 systemd-oomd
         run: |
+          # 1. 关闭并彻底停用系统级 OOM 守护进程 (防止误杀编译进程)
+          sudo systemctl stop systemd-oomd || true
+          sudo systemctl disable systemd-oomd || true
+          
+          # 2. 调高系统的 Swap 积极性
+          sudo sysctl vm.swappiness=100
+          
+          # 3. 释放旧 swap 并建立 10GB 专用虚拟内存
           sudo swapoff -a || true
           sudo rm -f /swapfile_aera
           sudo fallocate -l 10G /swapfile_aera
@@ -83,9 +91,15 @@ jobs:
         run: |
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
+          
+          # 限制 Go 运行时的内存峰值，防止 soong_build 占用膨胀
+          export GOGC=50
+          export GOMEMLIMIT=10GiB
+          
           source build/envsetup.sh
-          # 修改为三段式 lunch 目标
           lunch aera_pipa-bp2a-eng
+          
+          # 指定并行任务，避免并发过高耗尽物理内存
           mka bootimage -j$(nproc)
 
       - name: 7. 提取与打包生成镜像
