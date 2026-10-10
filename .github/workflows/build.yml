@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-            - name: 1. 深度清理磁盘空间 (极限释放 ~35GB+)
+      - name: 1. 深度清理磁盘空间 (极限释放 ~35GB+)
         run: |
           # 停用并彻底抹除 Docker 镜像及运行库
           sudo systemctl stop docker.service || true
