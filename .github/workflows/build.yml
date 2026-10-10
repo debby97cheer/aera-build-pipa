@@ -84,7 +84,8 @@ jobs:
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
           source build/envsetup.sh
-          lunch aera_pipa-eng
+          # 修改为三段式 lunch 目标
+          lunch aera_pipa-bp2a-eng
           mka bootimage -j$(nproc)
 
       - name: 7. 提取与打包生成镜像
