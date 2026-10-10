@@ -25,12 +25,19 @@ jobs:
           sudo docker image prune --all --force
           df -h
 
-      - name: 2. 挂载 10GB Swap 虚拟内存 (防止 OOM)
+      - name: 2. 配置 10GB Swap 虚拟内存 (防 OOM)
         run: |
+          # 1. 释放并关闭正在运行的 swap 占用
+          sudo swapoff -a || true
+          sudo rm -f /swapfile
+          
+          # 2. 重新分配 10GB swap 空间
           sudo fallocate -l 10G /swapfile
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile
+          
+          # 3. 验证内存与虚拟内存状态
           free -h
 
       - name: 3. 安装依赖工具与 Repo
