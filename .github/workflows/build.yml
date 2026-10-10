@@ -84,17 +84,18 @@ jobs:
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
           
+          # 核心防卡死：将 Go 内存上限强行锁死在 11GB，留出 4GB 物理内存给系统缓存，杜绝磁盘 Swap 颠簸
+          export GOMEMLIMIT=11GiB
+          export GOGC=80
+          
           source build/envsetup.sh
           lunch aera_pipa-bp2a-eng
           
-          # 后台保活守护：每 60 秒打印一次内存与时间，防止 GitHub 判定失联，并证明系统没有卡死
-          (while true; do sleep 60; echo "[保活心跳 $(date +%T)] 正在生成 Ninja 依赖树或编译中，内存状态："; free -h | grep Mem; done) &
+          # 心跳同时监控 Mem 和 Swap，方便精准查看进度
+          (while true; do sleep 60; echo "[保活心跳 $(date +%T)] 正在生成依赖树/编译中："; free -h | grep -E 'Mem|Swap'; done) &
           HEARTBEAT_PID=$!
           
-          # 启动编译
           mka bootimage -j$(nproc)
-          
-          # 编译结束后终止保活进程
           kill $HEARTBEAT_PID || true
 
       - name: 7. 提取与打包生成镜像
