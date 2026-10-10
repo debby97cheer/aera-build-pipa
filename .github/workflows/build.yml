@@ -25,20 +25,11 @@ jobs:
           sudo docker image prune --all --force
           df -h
 
-      - name: 2. 配置 12GB Swap 并彻底拔除 systemd-oomd
+      - name: 2. 配置 8GB Swap 虚拟内存
         run: |
-          # 彻底清除 Ubuntu 系统的 OOM 杀进程服务
-          sudo systemctl stop systemd-oomd.service || true
-          sudo systemctl disable systemd-oomd.service || true
-          sudo systemctl mask systemd-oomd.service || true
-          
-          # 优化虚拟内存积极性
-          sudo sysctl vm.swappiness=100
-          
-          # 释放旧 swap，新建 12GB 专用虚拟内存
           sudo swapoff -a || true
           sudo rm -f /swapfile_aera
-          sudo fallocate -l 12G /swapfile_aera
+          sudo fallocate -l 8G /swapfile_aera
           sudo chmod 600 /swapfile_aera
           sudo mkswap /swapfile_aera
           sudo swapon /swapfile_aera
@@ -93,14 +84,18 @@ jobs:
           cd ~/aera-work
           export ALLOW_MISSING_DEPENDENCIES=true
           
-          # 优化 Go 垃圾回收频率，防止生成 Ninja 文件时突发吃满内存
-          export GOGC=40
-          
           source build/envsetup.sh
           lunch aera_pipa-bp2a-eng
           
-          # 并发数设置为与 CPU 核心一致
+          # 后台保活守护：每 60 秒打印一次内存与时间，防止 GitHub 判定失联，并证明系统没有卡死
+          (while true; do sleep 60; echo "[保活心跳 $(date +%T)] 正在生成 Ninja 依赖树或编译中，内存状态："; free -h | grep Mem; done) &
+          HEARTBEAT_PID=$!
+          
+          # 启动编译
           mka bootimage -j$(nproc)
+          
+          # 编译结束后终止保活进程
+          kill $HEARTBEAT_PID || true
 
       - name: 7. 提取与打包生成镜像
         run: |
